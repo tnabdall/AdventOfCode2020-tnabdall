@@ -10,7 +10,37 @@ namespace Day9
         {
             GetNumberThatIsNotSumOfLastXNumbers(PROBLEM_INPUT, 25); // Answer = 1398413738
 
+            IList<long> contiguousSet = FindContiguousSetOfNumbersThatAddUpToNum(ConvertListOfStringsToListOfLongs(PROBLEM_INPUT, new char[] { '\n' }), 1398413738);
+            if (contiguousSet == null)
+                return;
+
+            Console.WriteLine($"The encryption weakness is {contiguousSet.Max() + contiguousSet.Min()}"); // Answer = 169521051
+
             Console.ReadLine(); // To pause at end of program
+        }
+
+        private static IList<long> FindContiguousSetOfNumbersThatAddUpToNum(IList<long> fullSet, long numberToAddUpTo)
+        {
+            if (fullSet.Count < 2)
+                throw new ArgumentException("Must have at least 2 elements in list");
+            for (int i = 0; i < fullSet.Count - 1; i++)
+            {
+                long thisSum = 0;
+                for (int j = i; j < fullSet.Count; j++)
+                {
+                    thisSum += fullSet[j];
+                    if (thisSum == numberToAddUpTo)
+                    {
+                        return fullSet.Skip(i).Take(j - i + 1).ToList();
+                    }
+                    else if (thisSum > numberToAddUpTo)
+                    {
+                        break; // We're higher than the sum. Start with the next one
+                    }
+                }
+            }
+
+            return null;
         }
 
         private static long? GetNumberThatIsNotSumOfLastXNumbers(string input, int previousNumberCountToCheckForSum)
