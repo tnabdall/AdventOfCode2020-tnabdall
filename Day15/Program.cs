@@ -29,43 +29,39 @@ namespace Day15
 
             var counter = 1;
             // For each number keeps the last time it was spoken and the time before that as well.
-            var lastTimeNumbersSpoken = new Dictionary<long, long[]>();
+            var lastTimeNumbersSpoken = new Dictionary<long, long>();
 
-            foreach (var num in startingNumbers)
+            foreach (var num in startingNumbers.Take(startingNumbers.Count()-1))
             {
-                AddNewNumber(num);
+                lastTimeNumbersSpoken[num] = counter++;
             }
 
             var lastNumber = startingNumbers.Last();
+            var delayedCommitToMemory = ((long)lastNumber, (long)counter++);          
+
             var currentNumber = (long)-1;
             do
             {
-                var lastTimeSpokenMemory = lastTimeNumbersSpoken[lastNumber];
-
-                if (lastTimeSpokenMemory[1] == -1)
-                    currentNumber = 0;
+                if (lastTimeNumbersSpoken.TryGetValue(lastNumber, out var mem))
+                {
+                    currentNumber = counter - 1 - mem;
+                }
                 else
-                    currentNumber = lastTimeSpokenMemory[0] - lastTimeSpokenMemory[1];
+                {
+                    currentNumber = 0;
+                }
 
-                Console.WriteLine($"{counter}: {currentNumber}");
-                AddNewNumber(currentNumber);
+                lastTimeNumbersSpoken[delayedCommitToMemory.Item1] = delayedCommitToMemory.Item2;
+                // Note to self: This adds so much time per loop
+                //Console.WriteLine($"{counter}: {currentNumber}");
                 lastNumber = currentNumber;
+                delayedCommitToMemory = (lastNumber, counter++);
 
             } while (counter <= count);
+            lastTimeNumbersSpoken[delayedCommitToMemory.Item1] = delayedCommitToMemory.Item2;
 
-            void AddNewNumber(long num)
-            {
-                if (lastTimeNumbersSpoken.TryGetValue(num, out var memory))
-                {
-                    memory[1] = memory[0];
-                    memory[0] = counter++;
-                }
-                else
-                {
-                    // -1 Means no second number encountered
-                    lastTimeNumbersSpoken[num] = new long[2] { counter++, -1 };
-                }
-            }
+            Console.WriteLine($"{delayedCommitToMemory.Item2}: {delayedCommitToMemory.Item1}");
+
         }
 
         const string EXAMPLE_INPUT = "0,3,6";
