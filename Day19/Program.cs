@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.RegularExpressions;
 
 namespace Day19
 {
@@ -11,7 +12,59 @@ namespace Day19
             var rules = GetRuleSet(PROBLEM_RULES);
             var firstRule = rules.First();
             PrintMatches(PROBLEM_INPUT, firstRule);
+            Part2(rules.ToList(), PROBLEM_INPUT);
             Console.ReadLine();
+        }
+
+        static void Part2(List<Rule> rules, string input)
+        {
+            var inputList = input.Split('\n', StringSplitOptions.RemoveEmptyEntries).Select(e => e.Trim());
+            rules.First(r => r.Index == 8).RuleStr = "42 | 42 8";
+            rules.First(r => r.Index == 11).RuleStr = "42 31 | 42 11 31";
+
+
+            var set42 = rules.Where(rule => rule.Index == 42).First().MatchStr;
+            var set31 = rules.Where(rule => rule.Index == 31).First().MatchStr;
+
+            // Rule 0 is 8 / 11
+            // Rule 8 is 42, repeated
+            // Rule 11 is 42 then 31, or a combination thereof of 42 then 31.
+
+            // In terms of regex, this is basically match 42 from the beginning. Count it.
+            // Then match 31 from the end and count that, and the second count should be the first - 1/
+
+            // All regex rules
+            var matchedCount = 0;
+            var regex1 = $"^(?<d>{string.Join('|', set42.Select(x => $"(?:{x})"))})+";
+            var regex2 = $"(?<f>{string.Join('|', set31.Select(x => $"(?:{x})"))})+$";
+            var regex = $"{regex1}{regex2}";
+            foreach (var inputStr in inputList)
+            {
+                var strCopy = inputStr + "";
+
+                var totalMatch = Regex.Match(inputStr, regex);
+                if (totalMatch.Success)
+                {
+                    int regex1MatchCount = 0; int regex2MatchCount = 0;
+                    foreach (var grp in totalMatch.Groups.Values)
+                    {
+                        if (grp is Group g)
+                        {
+                            if (g.Name == "d")
+                                regex1MatchCount += g.Captures.Count;
+                            else if (g.Name == "f")
+                                regex2MatchCount += g.Captures.Count;
+                        }
+
+                    }
+
+                    if (regex1MatchCount > 1 && regex2MatchCount > 0 && regex1MatchCount > regex2MatchCount)
+                        matchedCount++;
+                }
+            }
+            
+
+            Console.WriteLine(matchedCount);
         }
 
         static void PrintMatches(string input, Rule rule)
@@ -29,7 +82,8 @@ namespace Day19
             {
                 var parts = x.Split(":", StringSplitOptions.RemoveEmptyEntries);
                 var idx = int.Parse(parts[0]);
-                var ruleStr = parts[1];
+                var ruleStr = parts[1];;
+
                 return new Rule() { Index = idx, RuleStr = ruleStr };
             }).OrderBy(e => e.Index).ToList();
             rules.ForEach(e => e.RuleSet = rules.ToArray());
