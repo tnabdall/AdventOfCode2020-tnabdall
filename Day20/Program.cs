@@ -11,30 +11,12 @@ namespace Day20
             var tiles = ParseInput(PROBLEM_INPUT).ToArray();
 
             // Let's maybe try and find the 4 tiles that cannot connect to more than 2 tiles in any permutation
-            var maxTileConnectionsByTileId = new Dictionary<long, int>();
+            var maxTileConnectionsByTileId = new Dictionary<long, (int, Tile)>();
 
             foreach(var tile in tiles)
             {
-                maxTileConnectionsByTileId[tile.ID] = 0;
-                var tilePerms = new Tile[]
-                {
-                    tile,
-                    tile.Rotate90(),
-                    tile.Rotate180(),
-                    tile.Rotate270(),
-                    tile.FlipHoriz(),
-                    tile.FlipHoriz().Rotate90(),
-                    tile.FlipHoriz().Rotate180(),
-                    tile.FlipHoriz().Rotate270(),
-                    tile.FlipVert(),
-                    tile.FlipVert().Rotate90(),
-                    tile.FlipVert().Rotate180(),
-                    tile.FlipVert().Rotate270(),
-                    tile.FlipHoriz().FlipVert(),
-                    tile.FlipHoriz().FlipVert().Rotate90(),
-                    tile.FlipHoriz().FlipVert().Rotate180(),
-                    tile.FlipHoriz().FlipVert().Rotate270(),
-                };
+                maxTileConnectionsByTileId[tile.ID] = (0, null);
+                var tilePerms = tile.GetPerms();
 
                 foreach (var perm1 in tilePerms)
                 {
@@ -43,25 +25,7 @@ namespace Day20
                     {
                         if (otherTile == tile)
                             continue;
-                        var otherTilePerms = new Tile[]
-                        {
-                            otherTile,
-                            otherTile.Rotate90(),
-                            otherTile.Rotate180(),
-                            otherTile.Rotate270(),
-                            otherTile.FlipHoriz(),
-                            otherTile.FlipHoriz().Rotate90(),
-                            otherTile.FlipHoriz().Rotate180(),
-                            otherTile.FlipHoriz().Rotate270(),
-                            otherTile.FlipVert(),
-                            otherTile.FlipVert().Rotate90(),
-                            otherTile.FlipVert().Rotate180(),
-                            otherTile.FlipVert().Rotate270(),
-                            otherTile.FlipHoriz().FlipVert(),
-                            otherTile.FlipHoriz().FlipVert().Rotate90(),
-                            otherTile.FlipHoriz().FlipVert().Rotate180(),
-                            otherTile.FlipHoriz().FlipVert().Rotate270(),
-                        };
+                        var otherTilePerms = otherTile.GetPerms();
 
                         foreach (var perm2 in otherTilePerms)
                         {
@@ -73,14 +37,188 @@ namespace Day20
                         }
                     }
 
-                    maxTileConnectionsByTileId[tile.ID] = Math.Max(maxTileConnectionsByTileId[tile.ID], permMatches);
+                    if (permMatches > maxTileConnectionsByTileId[tile.ID].Item1)
+                    {
+                        maxTileConnectionsByTileId[tile.ID] = (permMatches, perm1);
+                    }
                 }
             }
 
 
-            var cornerTiles = maxTileConnectionsByTileId.Where(e => e.Value == 2);
+            var cornerTiles = maxTileConnectionsByTileId.Where(e => e.Value.Item1 == 2);
+
             Console.WriteLine(cornerTiles.Select(e => e.Key).Aggregate((e, g) => e * g));
+
+            // Assemble the tiles
+            // Start with top left
+            var topLeft = cornerTiles.First().Value.Item2;
+            List<Tile> remainingTiles;
+            Tile rightNeighbour = null;
+            Tile bottomNeighbour = null;
+            foreach (var tile in cornerTiles.Skip(1))
+            {
+                topLeft = tile.Value.Item2;
+                remainingTiles = tiles.Where(e => e.ID != topLeft.ID).ToList();
+                var rightNeighbours = remainingTiles.SelectMany(e => e.GetPerms())
+                    .Where(e => topLeft.CanConnectToOtherTile(e, Tile.EdgeEnum.Right));
+                var bottomNeighbours = remainingTiles.SelectMany(e => e.GetPerms())
+                    .Where(e => topLeft.CanConnectToOtherTile(e, Tile.EdgeEnum.Bottom));
+                if (rightNeighbours.Any() && bottomNeighbours.Any())
+                {
+                    rightNeighbour = rightNeighbours.First();
+                    bottomNeighbour = bottomNeighbours.First();
+                    break;
+                }
+            }
+
+            remainingTiles = tiles.Where(e => !new long[] {topLeft.ID, rightNeighbour.ID, bottomNeighbour.ID }.Contains(e.ID)).ToList();
+
+            List<TileInGrid> tilesInGrid = new List<TileInGrid>()
+            {
+                new TileInGrid(){PositX = 0, PositY = 0, Tile = topLeft},
+                new TileInGrid(){PositX = 1, PositY = 0, Tile = rightNeighbour},
+                new TileInGrid(){PositX = 0, PositY = 1, Tile = bottomNeighbour},
+            };
+            tilesInGrid[0].BottomNeighbour = tilesInGrid[2];
+            tilesInGrid[2].TopNeighbour = tilesInGrid[0];
+            tilesInGrid[0].RightNeigbour = tilesInGrid[1];
+            tilesInGrid[1].LeftNeighbour = tilesInGrid[0];
+
+            var maxTilesPerXY = (int)Math.Sqrt(tiles.Length);
+            while (tilesInGrid.Count < tiles.Length)
+            {
+                // Iteration 1 (choose the tile that works)
+                foreach(var tile in tilesInGrid.ToArray())
+                {
+                    if (tile.RightNeigbour == null && tile.PositX < maxTilesPerXY - 1)
+                    {
+                        var potentialTopTile = tilesInGrid.FirstOrDefault(e => e.PositX == tile.PositX + 1 && e.PositY == tile.PositY - 1);
+
+                        var tilesThatCanConnect = remainingTiles.SelectMany(e => e.GetPerms())
+                            .Where(e => tile.Tile.CanConnectToOtherTile(e, Tile.EdgeEnum.Right)
+                            && (potentialTopTile?.Tile?.CanConnectToOtherTile(e, Tile.EdgeEnum.Bottom) ?? true));
+                        if (tilesThatCanConnect.Count() >= 1)
+                        {
+                            var rNeighbour = new TileInGrid() { Tile = tilesThatCanConnect.First(), PositX = tile.PositX + 1, PositY = tile.PositY, LeftNeighbour = tile };
+                            tile.RightNeigbour = rNeighbour;
+                            if (potentialTopTile != null)
+                            {
+                                potentialTopTile.BottomNeighbour = tile.BottomNeighbour;
+                                tile.TopNeighbour = potentialTopTile;
+                            }
+                            remainingTiles.RemoveAll(t => t.ID == rNeighbour.Tile.ID);
+                            tilesInGrid.Add(rNeighbour);
+                            break;
+                        }
+                    }
+
+                    if (tile.BottomNeighbour == null && tile.PositY < maxTilesPerXY - 1)
+                    {
+
+                        var potentialLeftTile = tilesInGrid.FirstOrDefault(e => e.PositX == tile.PositX - 1 && e.PositY == tile.PositY + 1);
+
+                        var tilesThatCanConnect = remainingTiles.SelectMany(e => e.GetPerms())
+                            .Where(e => tile.Tile.CanConnectToOtherTile(e, Tile.EdgeEnum.Bottom)
+                            && (potentialLeftTile?.Tile?.CanConnectToOtherTile(e, Tile.EdgeEnum.Right) ?? true));
+                        if (tilesThatCanConnect.Count() >= 1)
+                        {
+                            var bNeighbour = new TileInGrid() { Tile = tilesThatCanConnect.First(), PositX = tile.PositX, PositY = tile.PositY + 1, TopNeighbour = tile };
+                            tile.BottomNeighbour = bNeighbour;
+                            if (potentialLeftTile != null)
+                            {
+                                potentialLeftTile.RightNeigbour = tile.BottomNeighbour;
+                                tile.LeftNeighbour = potentialLeftTile;
+                            }
+                            remainingTiles.RemoveAll(t => t.ID == bNeighbour.Tile.ID);
+                            tilesInGrid.Add(bNeighbour);
+                            break;
+                        }
+                    }
+                }
+            }
+
+            var arrLength = tiles.First().GetEdges().First().Value.Length;
+            bool[,] puzzleArr = new bool[(maxTilesPerXY) * (arrLength - 2) , (maxTilesPerXY) * (arrLength - 2)];
+
+            // Let's make the rows first
+            var iCounter = 0;
+            var jCounter = 0;
+            for (int i = 0; i < maxTilesPerXY; i++)
+            {
+                var sorted = tilesInGrid.Where(e => e.PositY == i).OrderBy(e => e.PositX).ToArray();
+                jCounter = 0;
+                for (int j = 0; j < sorted.Count(); j++)
+                {
+                    var tileInGrid = sorted[j];
+                    var imgArray = tileInGrid.Tile.ImageArray;
+                    for (int i2 = 0; i2 < arrLength; i2++)
+                    {
+                        // Trim borders
+                        if (i2 == 0)
+                        {
+                            continue;
+                        }
+                        if (i2 == arrLength - 1)
+                            continue;
+                        for (int j2 = 0; j2 < arrLength; j2++)
+                        {
+                            if (j2 == 0)
+                            {
+                                continue;
+                            }
+                            if (j2 == arrLength - 1)
+                                continue;
+
+                            puzzleArr[iCounter + i2 -1, jCounter + j2 -1] = imgArray[i2, j2];
+                        }                        
+                    }
+
+                    jCounter += arrLength - 2;                    
+                }
+                iCounter += arrLength - 2;                
+            }
+                
+
+            Tile assembledPuzzle = new Tile() { ID = 01, ImageArray = puzzleArr, FlipOrientation = Tile.FlipOrientationEnum.Regular, Rotation = Tile.RotationEnum.Regular };
+
+            var seaMonsterStr = @"                  # 
+#    ##    ##    ###
+ #  #  #  #  #  #   ";
+
+            var seaMonsterLines = seaMonsterStr.Split("\r\n", StringSplitOptions.RemoveEmptyEntries);
+            // bool[,] seaMonsterArr = new bool[seaMonsterLines.Length, seaMonsterLines[0].Length];
+            var seaMonsterCoordinatesMap = new HashSet<(int i, int j)>();
+
+            for (int i = 0; i < seaMonsterLines.Length; i++)
+            {
+                for (int j = 0; j < seaMonsterLines[i].Length; j++)
+                {
+                    //seaMonsterArr[i, j] = seaMonsterLines[i][j] == '#';
+                    if (seaMonsterLines[i][j] == '#')
+                        seaMonsterCoordinatesMap.Add((i, j));
+                }
+            }
+
+
+            var maxSeaMonsters = 0;
+            foreach(var perm in assembledPuzzle.GetPerms())
+            {
+                maxSeaMonsters = Math.Max(maxSeaMonsters, perm.CountSeaMonsters(seaMonsterCoordinatesMap));
+            }
+
+            Console.WriteLine($"Count is { (from bool item in assembledPuzzle.ImageArray where item == true select item).Count() - seaMonsterCoordinatesMap.Count * maxSeaMonsters}");
             Console.ReadLine();
+        }
+
+        class TileInGrid
+        {
+            public int PositX { get; set; }
+            public int PositY { get; set; }
+            public Tile Tile { get; set; }
+            public TileInGrid TopNeighbour { get; set; }
+            public TileInGrid BottomNeighbour { get; set; }
+            public TileInGrid LeftNeighbour { get; set; }
+            public TileInGrid RightNeigbour { get; set; }
         }
 
         private static IEnumerable<Tile> ParseInput(string input)
@@ -102,20 +240,43 @@ namespace Day20
                             arr[i-1, j] = lines[i][j] == '#';
                         }
                     }
-                    return new Tile { ID = id, ImageArray = arr, FlipOrientation = Tile.FlipOrientationEnum.Regular};
+                    return new Tile { ID = id, ImageArray = arr, FlipOrientation = Tile.FlipOrientationEnum.Regular, Rotation = Tile.RotationEnum.Regular};
                 });
         }
 
         class Tile
         {
             public enum FlipOrientationEnum { Regular, FlipX, FlipY, FlipBoth }
-            public enum RotationEnum { Regular, R90, R180, R270}
+            public enum RotationEnum { Regular, R90, R180, R270 }
 
             public FlipOrientationEnum FlipOrientation { get; set; }
+            public RotationEnum Rotation { get; set; }
             public long ID { get; set; }
             public bool[,] ImageArray { get; set; }
 
             private Dictionary<EdgeEnum, bool[]> edges = null;
+
+            public Tile[] GetPerms()
+            {
+                return new Tile[]{
+                    this,
+                    Rotate90(),
+                    Rotate180(),
+                    Rotate270(),
+                    FlipHoriz(),
+                    FlipHoriz().Rotate90(),
+                    FlipHoriz().Rotate180(),
+                    FlipHoriz().Rotate270(),
+                    FlipVert(),
+                    FlipVert().Rotate90(),
+                    FlipVert().Rotate180(),
+                    FlipVert().Rotate270(),
+                    FlipHorizVert(),
+                    // FlipHorizVert().Rotate90(), 
+                    // FlipHorizVert().Rotate180(), (duplicate case of regular)
+                    // FlipHorizVert().Rotate270()
+                };
+            }
 
             public bool CanConnectToOtherTile(Tile other)
             {
@@ -134,6 +295,23 @@ namespace Day20
                 return false;
             }
 
+            public bool CanConnectToOtherTile(Tile other, EdgeEnum onEdge)
+            {
+                var thisEdges = GetEdges();
+                var otherEdges = other.GetEdges();
+
+                if (onEdge == EdgeEnum.Left && thisEdges[EdgeEnum.Left].SequenceEqual(otherEdges[EdgeEnum.Right]))
+                    return true;
+                if (onEdge == EdgeEnum.Right && thisEdges[EdgeEnum.Right].SequenceEqual(otherEdges[EdgeEnum.Left]))
+                    return true;
+                if (onEdge == EdgeEnum.Top && thisEdges[EdgeEnum.Top].SequenceEqual(otherEdges[EdgeEnum.Bottom]))
+                    return true;
+                if (onEdge == EdgeEnum.Bottom && thisEdges[EdgeEnum.Bottom].SequenceEqual(otherEdges[EdgeEnum.Top]))
+                    return true;
+
+                return false;
+            }
+
             public Tile Rotate90()
             {
                 bool[,] rotatedArray = new bool[ImageArray.GetLength(0), ImageArray.GetLength(1)];
@@ -145,7 +323,7 @@ namespace Day20
                     }
                 }
 
-                return new Tile { ID = ID, ImageArray = rotatedArray };
+                return new Tile { ID = ID, ImageArray = rotatedArray, FlipOrientation = FlipOrientation, Rotation = RotationEnum.R90 };
             }
 
             public Tile Rotate180()
@@ -159,7 +337,7 @@ namespace Day20
                     }
                 }
 
-                return new Tile { ID = ID, ImageArray = rotatedArray };
+                return new Tile { ID = ID, ImageArray = rotatedArray, FlipOrientation = FlipOrientation, Rotation = RotationEnum.R180 };
             }
 
             public Tile Rotate270()
@@ -173,7 +351,7 @@ namespace Day20
                     }
                 }
 
-                return new Tile { ID = ID, ImageArray = rotatedArray };
+                return new Tile { ID = ID, ImageArray = rotatedArray, FlipOrientation = FlipOrientation, Rotation = RotationEnum.R270 };
             }
 
             public Tile FlipHoriz()
@@ -187,7 +365,7 @@ namespace Day20
                     }
                 }
 
-                return new Tile { ID = ID, ImageArray = flippedArray };
+                return new Tile { ID = ID, ImageArray = flippedArray, FlipOrientation = FlipOrientationEnum.FlipX, Rotation = Rotation };
             }
 
             public Tile FlipVert()
@@ -201,7 +379,21 @@ namespace Day20
                     }
                 }
 
-                return new Tile { ID = ID, ImageArray = flippedArray };
+                return new Tile { ID = ID, ImageArray = flippedArray, FlipOrientation = FlipOrientationEnum.FlipY, Rotation = Rotation };
+            }
+
+            public Tile FlipHorizVert()
+            {
+                bool[,] flippedArray = new bool[ImageArray.GetLength(0), ImageArray.GetLength(1)];
+                for (int i = 0; i < ImageArray.GetLength(0); i++)
+                {
+                    for (int j = 0; j < ImageArray.GetLength(1); j++)
+                    {
+                        flippedArray[i, j] = ImageArray[ImageArray.GetLength(1) - i - 1, ImageArray.GetLength(1) - j - 1];
+                    }
+                }
+
+                return new Tile { ID = ID, ImageArray = flippedArray, FlipOrientation = FlipOrientationEnum.FlipBoth, Rotation = Rotation };
             }
 
             public enum EdgeEnum { Top, Bottom, Left, Right };
@@ -242,6 +434,39 @@ namespace Day20
 
                 this.edges = edges;
                 return edges;
+            }
+
+            internal int CountSeaMonsters(HashSet<(int i, int j)> seaMonsterMap)
+            {
+                var count = 0;
+                var arrCopy = new bool[ImageArray.GetLength(0), ImageArray.GetLength(1)];
+                for (int i = 0; i < ImageArray.GetLength(0); i++)
+                    for (int j = 0; j < ImageArray.GetLength(1); j++)
+                        arrCopy[i, j] = ImageArray[i, j];
+
+                // Need to check for both all .s or all #
+                var invalidSearchSpace = new HashSet<(int i, int j)>();
+                var maxSeaMonsterI = seaMonsterMap.Max(e => e.i);
+                var maxSeaMonsterJ = seaMonsterMap.Max(e => e.j);
+
+                for (int i = 0; i < arrCopy.GetLength(0) - maxSeaMonsterI; i++)
+                    for (int j = 0; j < arrCopy.GetLength(1) - maxSeaMonsterJ; j++)
+                    {
+                        if (seaMonsterMap.Any(co => invalidSearchSpace.Contains((i + co.i, j + co.j))))
+                            continue;
+                        if (seaMonsterMap.All(co => arrCopy[i + co.i, j + co.j] == true))
+                        {
+                            count++;
+                            // Invalidate those spaces for other monsters
+                            foreach (var co in seaMonsterMap)
+                            {
+                                invalidSearchSpace.Add((i + co.i, j + co.j));
+                            }
+                        }                      
+
+                    }
+
+                return count;                
             }
         }
 
