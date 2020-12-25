@@ -8,11 +8,11 @@ namespace Day24
     {
         static void Main(string[] args)
         {
-            Part1(PROBLEM);
+            Part1And2(PROBLEM);
             Console.ReadLine();
         }
 
-        private static void Part1(string input)
+        private static void Part1And2(string input)
         {
             // Parse input to a list of moves
             var lines = input.Split(new char[] {'\n','\r' }, StringSplitOptions.RemoveEmptyEntries);
